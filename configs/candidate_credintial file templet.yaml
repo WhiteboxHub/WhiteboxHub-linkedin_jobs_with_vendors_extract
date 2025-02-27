@@ -1,5 +1,5 @@
-username: user@gmail.com  #linkedin account email
-password: password    # linkedin Account password
+username: mahendargoud9866@gmail.com  #linkedin account email
+password: M@hi1411    # linkedin Account password
 phone_number: (123) 456-7890      # google voice mobile number
 
 
@@ -22,15 +22,6 @@ roletype:
 salary: 150000
 rate: 90
 
-
-uploads:
-  Resume: Resumes/myresume.pdf   # this should be the path to resume in the Resume folder within the code directory
-
-
-# Male or Female
-gender: Female
-
-CurrentCTC: 140000
 
 
 # - # Company names you want to ignore
