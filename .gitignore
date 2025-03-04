@@ -1,4 +1,4 @@
-myenv
+myvenv/
 .vscode
 __pycache__
 ashbyhq_set.txt

@@ -6,7 +6,7 @@
 ## Features
 - **Automated LinkedIn Login**
 - **Job Search Automation** (based on YAML configuration)
-- **Filtering of "Easy Apply" Jobs**
+- **Filtering of "Apply" Jobs**
 - **Extraction of External Job Application Links**
 - **Categorization of Links by Vendor Platform**
 

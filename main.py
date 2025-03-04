@@ -1,4 +1,9 @@
-# linkedin_jobs_with_vendors_extract\main.py
+import os
+import time
+import random
+import yaml
+import pandas as pd
+from urllib.parse import urlparse
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.service import Service
@@ -6,56 +11,17 @@ from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
-import time
-import yaml
-import random
-from bs4 import BeautifulSoup
-from pathlib import Path
-import pandas as pd
-import re
-import os
-from urllib.parse import urlparse, urlunparse
+from postioin_role import ML_roles
 
-from postioin_role import UI_roles, ML_roles, QA_roles
+OUTPUT_FOLDER = "output"
+OUTPUT_CSV = os.path.join(OUTPUT_FOLDER, "links_extracted.csv")
 
-def detect_platform(domain):
-    platforms = {
-        "lever": "lever_set.txt",
-        "jobvite": "jobvite_set.txt",
-        "greenhouse": "greenhouse_set.txt",
-        "workable": "workable_set.txt",
-        "iCIMS": "iCIMS_set.txt",
-        "SmartRecruiters": "SmartRecruiters_set.txt",
-        "BambooHR": "BambooHR_set.txt",
-        "ashbyhq": "ashbyhq_set.txt"
-    }
-
-    for platform, filename in platforms.items():
-        if platform in domain:
-            return filename
-    return None
-
-def remove_query_parameters(url):
-    parsed_url = urlparse(url)
-    return urlunparse(parsed_url._replace(query='', fragment=''))
-
-def append_link_to_file(link, filename, output_folder):
-    if not os.path.exists(output_folder):
-        os.makedirs(output_folder)
-
-    output_path = os.path.join(output_folder, filename)
-    with open(output_path, 'a') as txtfile:
-        txtfile.write(link + "\n")
-    print(f"Appended link to {filename}")
 
 class ApplyBot:
-    def __init__(self, username, password, salary, rate, filename, uploads={},
+    def __init__(self, username, password, filename,
                  blacklist=[], blacklisttitles=[], experiencelevel=[], locations=[], positions=[]):
         self.username = username
         self.password = password
-        self.salary = salary
-        self.rate = rate
-        self.uploads = uploads
         self.filename = filename
         self.blacklist = blacklist
         self.blacklisttitles = blacklisttitles
@@ -67,30 +33,11 @@ class ApplyBot:
         self.driver = webdriver.Chrome(service=service)
         self.wait = WebDriverWait(self.driver, 30)
 
-        self.qa_file = Path(f"Qa/qa_{self.username}.csv")
-        self.answer = {}
-
-        if self.qa_file.is_file():
-            df = pd.read_csv(self.qa_file)
-            for index, row in df.iterrows():
-                self.answer[row['Question']] = row["Answer"]
-        else:
-            df = pd.DataFrame(columns=["Question", "Answer"])
-            df.to_csv(self.qa_file, index=False, encoding='utf-8')
-
         self.locator = {
-            "non_easy_apply_button": (By.XPATH, '//button[contains(@class, "jobs-apply-button")]'),
-            "links": (By.XPATH, '//div[@data-job-id]'),
-            "search": (By.CLASS_NAME, "jobs-search-results-list")
+            "non_easy_apply_button": (By.XPATH, '//button[contains(@class, "jobs-apply-button")]')
         }
 
-        print(f"--------------------------the Candidate Selected for Marketing is {self.username}------------------------------")
-        print(f'{self.salary}\n')
-        print(f'{self.uploads}\n')
-        print(f'{self.experiencelevel}\n')
-        print(f'{self.locations}\n')
-        print(f'{self.positions}\n')
-        print('Linkedin Login is initiated')
+        print(f"Candidate: {self.username} | Experience: {self.experiencelevel} | Locations: {self.locations} | Positions: {self.positions}")
         self.login_linkedin()
 
     def login_linkedin(self):
@@ -100,171 +47,116 @@ class ApplyBot:
         self.driver.find_element(By.ID, 'password').send_keys(self.password)
         self.driver.find_element(By.XPATH, "//button[@type='submit']").click()
         self.sleep(10)
-        self.findingCombos_postion_location()
+        self.process_job_search()
 
     def sleep(self, sleeptime=random.randrange(3, 6)):
-        randomtime = sleeptime
-        print(f"Application is sleeping for a random time of {randomtime} seconds")
-        time.sleep(randomtime)
+        print(f"Sleeping for {sleeptime} seconds...")
+        time.sleep(sleeptime)
 
-    def roletypestr_convertion(self):
-        rolearr = []
-        if rolearr == []:
-            return ""
-        elif rolearr == [1] or rolearr == [2] or rolearr == [3]:
-            return f"&f_WT={str(rolearr[0])}"
-        elif rolearr == [1, 2]:
-            return "&f_WT=1%2C3"
-        elif rolearr == [1, 3]:
-            return "&f_WT=1%2C2"
-        elif rolearr == [2, 3]:
-            return "&f_WT=3%2C2"
-        elif rolearr == [1, 2, 3]:
-            return "&f_WT=1%2C3%2C2"
+    def process_job_search(self):
+        for position in self.positions:
+            for location in self.locations:
+                self.search_and_extract(position, location)
 
-    def findingCombos_postion_location(self):
-        combolist = []
-        while len(combolist) < len(self.positions) * len(self.locations):
-            for i in self.positions:
-                for j in self.locations:
-                    combo = (i, j)
-                    combolist.append(combo)
-                    self.Get_job_application_page(position=i, location=j)
+    def search_and_extract(self, position, location):
+        print(f"Searching for jobs: {position} in {location}")
+        search_url = f"https://www.linkedin.com/jobs/search/?keywords={position}&location={location}"
+        self.driver.get(search_url)
+        self.sleep(5)
 
-    def Get_job_application_page(self, location, position):
-        exp_lvl_str = ",".join(map(str, self.experiencelevel)) if self.experiencelevel else ""
-        exp_lvl_param = f"&f_E={exp_lvl_str}" if exp_lvl_str else ""
-        location_str = f"&location={location}"
-        position_str = f"&keywords={position}"
-        Job_per_page = 0
-        self.sleep()
-        rolestring = self.roletypestr_convertion()
-        print(f"Searching for the location= {location} and job = {position} ")
-        URL = "https://www.linkedin.com/jobs/search/?keywords=" + position_str + str(rolestring) + location_str + exp_lvl_param + "&start=" + str(Job_per_page)
+        self.scroll_and_load_page()
 
-        self.driver.get(URL)
-        self.sleep(10)
-        try:
-            TotalresultsFound = self.driver.find_element(By.XPATH, "//*[@id='main']/div/div[2]/div[1]/header/div[1]/small/div/span")
-            self.sleep(2)
-            resultsFoundnumber = ''.join(re.findall(r'\d', TotalresultsFound.text))
-            Job_Search_Results_count = int(resultsFoundnumber)
-        except Exception as e:
-            Job_Search_Results_count = 0
-        print(f"-----------------------This is the total count fo the results that can be get --{Job_Search_Results_count}----------------------------------------------------")
-        while Job_per_page < Job_Search_Results_count:
-            URL = "https://www.linkedin.com/jobs/search/?keywords=" + position_str + rolestring + location_str + exp_lvl_param + "&start=" + str(Job_per_page)
-            self.driver.get(URL)
-            self.sleep()
-            self.Load_page_Scroll_page()
-            if self.is_present(self.locator["search"]):
-                scrollresult = self.get_elements("search")
-                for i in range(300, 3000, 100):
-                    self.driver.execute_script("arguments[0].scrollTo(0, {})".format(i), scrollresult[0])
-                scrollresult = self.get_elements("search")
-                self.sleep(1)
+        job_links = self.extract_apply_links()
+        for job_url in job_links:
+            self.process_and_save_job_info(job_url)
 
-            if self.is_present(self.locator["links"]):
-                links = self.get_elements("links")
-                jobIDs = {}
-                for link in links:
-                    print(f"the link.text is {link.text}")
-                    if 'Applied' not in link.text:
-                        if link.text not in self.blacklist:
-                            jobID = link.get_attribute("data-job-id")
-                            if jobID == "search":
-                                print("Job ID not found, search keyword found instead? {}")
-                                continue
-                            else:
-                                jobIDs[jobID] = "To be processed"
-                if len(jobIDs) > 0:
-                    self.job_apply_loop(jobIDs)
-            Job_per_page += 25
-        return
+    def scroll_and_load_page(self):
+        for i in range(0, 3000, 500):
+            self.driver.execute_script(f"window.scrollTo(0, {i});")
+            self.sleep(1)
 
-    def job_apply_loop(self, jobIDS):
-        for jobID in jobIDS:
-            if jobIDS[jobID] == "To be processed":
-                try:
-                    self.Start_applying_with_jobid(jobID)
-                except Exception as e:
-                    print(e)
-                    continue
-
-    def Start_applying_with_jobid(self, jobid):
-        self.Get_Job_page_with_jobid(jobid)
-        self.sleep(4)
-        apply_urls = self.get_apply_button_urls()
-        for url in apply_urls:
-            cleaned_url = remove_query_parameters(url)
-            filename = detect_platform(urlparse(cleaned_url).netloc)
-            print('--------------------------------',filename, '--------------------------------')
-            if filename:
-                append_link_to_file(cleaned_url, filename, "output")
-
-    def Get_Job_page_with_jobid(self, jobID):
-        joburl = "https://www.linkedin.com/jobs/view/" + str(jobID)
-        self.driver.get(joburl)
-        self.job_page = self.Load_page_Scroll_page()
-        self.sleep(1)
-        return self.job_page
-
-    def Load_page_Scroll_page(self):
-        scrollpage = 0
-        while scrollpage < 4000:
-            self.driver.execute_script("window.scrollTo(0," + str(scrollpage) + ");")
-            scrollpage += 500
-            self.sleep(0.2)
-        self.sleep()
-        self.driver.execute_script("window.scrollTo(0,0);")
-        page = BeautifulSoup(self.driver.page_source, 'lxml')
-        return page
-
-    def is_present(self, locator):
-        return len(self.driver.find_elements(locator[0], locator[1])) > 0
-
-    def get_elements(self, type) -> list:
-        elements = []
-        element = self.locator[type]
-        if self.is_present(element):
-            elements = self.driver.find_elements(element[0], element[1])
-        return elements
-
-    def get_apply_button_urls(self):
+    def extract_apply_links(self):
         apply_urls = set()
         try:
-            buttons = self.get_elements("non_easy_apply_button")
+            buttons = self.driver.find_elements(*self.locator["non_easy_apply_button"])
             for button in buttons:
                 button_text = button.text.strip()
-                if "Easy Apply" in button_text:
-                    print("Ignoring button with text: 'Easy Apply'")
-                    continue
-                elif "Apply" in button_text:
-                    print("Clicking button with text: 'Apply'")
+                if "Apply" in button_text and "Easy Apply" not in button_text:
                     original_url = self.driver.current_url
                     self.wait.until(EC.element_to_be_clickable(button)).click()
-                    time.sleep(5)
+                    time.sleep(3)
 
                     if len(self.driver.window_handles) > 1:
                         self.driver.switch_to.window(self.driver.window_handles[-1])
                         new_url = self.driver.current_url
-                        print(f"Extracted URL: {new_url}")
-
                         if new_url != original_url:
                             apply_urls.add(new_url)
-
                         self.driver.close()
                         self.driver.switch_to.window(self.driver.window_handles[0])
-                    else:
-                        print("No new window opened after clicking 'Apply'.")
-                time.sleep(2)
         except Exception as e:
-            print(f"Exception in get_apply_button_urls: {e}")
-        print(f"Extracted URLs: {apply_urls}")
+            print(f"Error extracting Apply links: {e}")
         return list(apply_urls)
 
+    def process_and_save_job_info(self, job_url):
+        platform, company, job_id = extract_platform_company_jobid(job_url)
+        save_extracted_data(platform, company, job_id)
+
+
+def extract_platform_company_jobid(url):
+    """Extracts platform, company name, and job ID from the given URL."""
+    parsed_url = urlparse(url)
+    domain_parts = parsed_url.netloc.split('.')
+
+    if "greenhouse" in domain_parts:
+        platform = "Greenhouse"
+    elif "lever" in domain_parts:
+        platform = "Lever"
+    elif "ashbyhq" in domain_parts:
+        platform = "AshbyHQ"
+    elif "jobvite" in domain_parts:
+        platform = "Jobvite"
+    else:
+        platform = domain_parts[-2] if len(domain_parts) > 1 else parsed_url.netloc
+
+    path_parts = parsed_url.path.strip('/').split('/')
+    company_name, job_id = "Unknown", "Unknown"
+
+    if platform in ["Greenhouse", "Lever", "AshbyHQ", "Jobvite"]:
+        if len(path_parts) >= 3:
+            company_name = path_parts[0]
+            job_id = path_parts[-1]
+    else:
+        if len(path_parts) >= 2:
+            company_name = path_parts[0]
+            job_id = path_parts[-1]
+
+    return platform, company_name, job_id
+
+
+def save_extracted_data(platform, company, job_id):
+    """Saves extracted job data in a structured table format (Excel-compatible CSV)"""
+
+    if not os.path.exists(OUTPUT_FOLDER):
+        os.makedirs(OUTPUT_FOLDER)
+
+    file_exists = os.path.exists(OUTPUT_CSV) and os.path.getsize(OUTPUT_CSV) > 0
+
+    if file_exists:
+        df = pd.read_csv(OUTPUT_CSV)
+        new_id = len(df) + 1
+    else:
+        new_id = 1
+
+    data = pd.DataFrame([[new_id, platform, company, job_id]], 
+                         columns=["ID", "Platform Name", "Company Name", "Job ID"])
+
+    data.to_csv(OUTPUT_CSV, mode='a', header=not file_exists, index=False, encoding="utf-8-sig")
+
+    print(f" Saved: ID={new_id}, Platform={platform}, Company={company}, Job ID={job_id}")
+
+
 def Main():
-    fileLocation = "configs/candidate_credintial file templet.yaml"
+    fileLocation = "configs/user_auth.yaml"
 
     with open(fileLocation, 'r') as stream:
         try:
@@ -284,31 +176,21 @@ def Main():
 
     if role_type == 'ML':
         positions = ML_roles
-    elif role_type == "QA":
-        positions = QA_roles
-    elif role_type == "UI":
-        positions = UI_roles
 
     blacklist = parameters.get('blacklist', [])
     blacklisttitles = parameters.get('blackListTitles', [])
-    uploads = parameters.get('uploads', {})
-    outputfilename = f"Output/Output_of_{parameters['username']}.csv"
     experiencelevel = parameters.get('experience_level', [])
-    rate = parameters['rate']
-    salary = parameters['salary']
 
     ApplyBot(
         username=username,
         password=password,
-        locations=locations,
-        salary=salary,
-        uploads=uploads,
+        filename=OUTPUT_CSV,
         blacklist=blacklist,
         blacklisttitles=blacklisttitles,
         experiencelevel=experiencelevel,
         positions=positions,
-        rate=rate,
-        filename=outputfilename
+        locations=locations
     )
+
 
 Main()
