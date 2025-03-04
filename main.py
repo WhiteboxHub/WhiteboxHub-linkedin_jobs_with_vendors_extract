@@ -148,7 +148,7 @@ def save_extracted_data(platform, company, job_id):
         new_id = 1
 
     data = pd.DataFrame([[new_id, platform, company, job_id]], 
-                         columns=["ID", "Platform Name", "Company Name", "Job ID"])
+                         columns=["id", "platform", "company", "jobid"])
 
     data.to_csv(OUTPUT_CSV, mode='a', header=not file_exists, index=False, encoding="utf-8-sig")
 
