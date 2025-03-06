@@ -1,7 +1,7 @@
 # LinkedIn Jobs with Vendors Extract
 
 ## Overview
-`linkedin_jobs_with_vendors_extract` is a Python-based automation tool that uses **Selenium** to search for job listings on LinkedIn, extract job application links, and categorize them based on external vendor platforms like **Lever, Greenhouse, jobvite, workable,ashbyhq etc.**
+`linkedin_jobs_with_vendors_extract` is a Python-based automation tool that uses **Selenium** to search for job listings on LinkedIn, extract job application links, and categorize them based on external vendor platforms like **Lever, Greenhouse, jobvite, workday etc.**
 
 ## Features
 - **Automated LinkedIn Login**
@@ -13,7 +13,6 @@
 ## Prerequisites
 Make sure you have the following installed:
 - **Python 3.8+**
-- **Google Chrome** (latest version)
 - **Chrome WebDriver** (managed via `webdriver_manager`)
 
 ## Installation & Setup
@@ -41,18 +40,15 @@ pip install -r requirements.txt
 ```
 
 ## Configuration
-Before running the bot, update the **YAML configuration file** (`configs/example(ML).yaml`) with your LinkedIn credentials and job search parameters:
+Before running the bot, update the **YAML configuration file** (`configs/user_auth.yaml`) with your LinkedIn credentials and job search parameters:
 ```yaml
 username: "your-email@example.com"
 password: "yourpassword"
 locations: ["New York, NY", "San Francisco, CA"]
 role_type: "ML"
-salary: "100000"
-rate: "hourly"
 experience_level: [2, 3]
 blacklist: []
 blackListTitles: []
-uploads: {}
 ```
 
 ## Running the Bot
@@ -62,15 +58,15 @@ python main.py
 
 ## File Structure
 ```
-linkedin_jobs_with_vendors_extract/
+project_root/
 │── configs/
-│   ├── example(ML).yaml  # Configuration file
-│── Output/               # Extracted job application links
-│── Qa/                   # QA data for question-answer handling
-│── postioin_role.py      # Defines ML/UI/QA roles (ensure it's present)
-│── main.py               # Main bot script
-│── requirements.txt      # Dependencies
-│── README.md             # Documentation
+│   ├── user_auth.yaml    # Configuration file with credentials and search criteria
+│── output/
+│   ├── linkedin_jobs_date_time.csv   # CSV file storing extracted job links
+│── main.py  # Main script to run the bot
+│── position_role.py  # Contains predefined job roles
+│── requirements.txt  # Python dependencies
+
 ```
 
 
