@@ -11,7 +11,10 @@ positions:
 
 locations:      # add location you want to apply
 - Fremont, CA
-- Remote,USA
+- Remote, USA 
+
+dateposted:
+- Past week
 
 roletype:
 - 1 #onsite
