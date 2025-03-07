@@ -7,6 +7,7 @@
 - **Automated LinkedIn Login**
 - **Job Search Automation** (based on YAML configuration)
 - **Filtering of "Apply" Jobs**
+- **Ignoring "Easy Apply" Jobs** 
 - **Extraction of External Job Application Links**
 - **Categorization of Links by Vendor Platform**
 
@@ -22,7 +23,7 @@ git clone https://github.com/yourusername/linkedin_jobs_with_vendors_extract.git
 cd linkedin_jobs_with_vendors_extract
 ```
 
-### 2. Create and Activate a Virtual Environment
+### 2. Create and Activate a Virtual Environment 
 #### On Windows:
 ```sh
 python -m venv venv

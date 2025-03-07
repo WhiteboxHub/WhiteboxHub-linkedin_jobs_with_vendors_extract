@@ -1,5 +1,5 @@
-username: username@gmail.com  #linkedin account email
-password: Password  # linkedin Account password
+username: mahendarbathini34@gmail.com  #linkedin account email
+password: mahi1411 # linkedin Account password
 phone_number: (123) 456-7890      # google voice mobile number
 
 
@@ -10,11 +10,9 @@ positions:
 - 1
 
 locations:      # add location you want to apply
-- Fremont, CA
-- Remote, USA 
+- San Francisco Bay Area, California
+- Remote, USA
 
-dateposted:
-- Past week
 
 roletype:
 - 1 #onsite

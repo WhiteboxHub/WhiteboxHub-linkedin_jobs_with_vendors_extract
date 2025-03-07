@@ -15,9 +15,7 @@ import re
 import os
 from urllib.parse import urlparse, urlunparse
 import csv
-from datetime import datetime
-
-from position_role import ML_roles  
+from position_role import ML_roles, UI_roles, QA_roles
 
 def detect_platform(domain):
     platforms = {
@@ -26,12 +24,10 @@ def detect_platform(domain):
         "greenhouse": "greenhouse",
         "workday": "workday"  
     }
-
     for platform, platform_name in platforms.items():
         if platform in domain:
             return platform_name
     
-
 def remove_query_parameters(url):
     parsed_url = urlparse(url)
     return urlunparse(parsed_url._replace(query='', fragment=''))
@@ -69,9 +65,6 @@ def append_link_to_csv(link, platform, company, job_id, output_folder):
             'company': company,
             'job_id': job_id
         })
-
-    print(f"Appended link to {csv_filename}")
-
 class ApplyBot:
     def __init__(self, username, password, filename, 
                  blacklist=[], blacklisttitles=[], experiencelevel=[], locations=[], positions=[]):
@@ -92,19 +85,12 @@ class ApplyBot:
             "search": (By.CLASS_NAME, "jobs-search-results-list")
         }
 
-        print(f"--------------------------the Candidate Selected for Marketing is {self.username}------------------------------")
-        
-        
-        print(f'{self.experiencelevel}\n')
-        print(f'{self.locations}\n')
-        print(f'{self.positions}\n')
-        print('Linkedin Login is initiated')
         self.login_to_linkedin()
 
     def login_to_linkedin(self):
         
         self.driver.get('https://www.linkedin.com/login')
-        self.sleep(15)
+        self.sleep(120)
         self.driver.find_element(By.ID, 'username').send_keys(self.username)
         self.driver.find_element(By.ID, 'password').send_keys(self.password)
         self.driver.find_element(By.XPATH, "//button[@type='submit']").click()
@@ -151,7 +137,7 @@ class ApplyBot:
         print(f"Searching for the location= {location} and job = {position} ")
         
         
-        URL = "https://www.linkedin.com/jobs/search/?keywords=" + position_str + str(rolestring) + location_str + exp_lvl_param + "&f_TPR=r86400" + "&start=" + str(Job_per_page)
+        URL = "https://www.linkedin.com/jobs/search/?keywords=" + position_str + str(rolestring) + location_str + exp_lvl_param +"&start=" + str(Job_per_page)
 
         self.driver.get(URL)
         self.sleep(10)
@@ -164,7 +150,7 @@ class ApplyBot:
             Job_Search_Results_count = 0
         print(f"-----------------------This is the total count fo the results that can be get --{Job_Search_Results_count}----------------------------------------------------")
         while Job_per_page < Job_Search_Results_count:
-            URL = "https://www.linkedin.com/jobs/search/?keywords=" + position_str + rolestring + location_str + exp_lvl_param + "&f_TPR=r86400" + "&start=" + str(Job_per_page)
+            URL = "https://www.linkedin.com/jobs/search/?keywords=" + position_str + rolestring + location_str + exp_lvl_param  + "&start=" + str(Job_per_page)
             self.driver.get(URL)
             self.sleep()
             self.load_and_scroll_page()
@@ -241,7 +227,6 @@ class ApplyBot:
         if self.is_present(element):
             elements = self.driver.find_elements(element[0], element[1])
         return elements
-
     def extract_company_name(self, url):
         try:
             parsed_url = urlparse(url)
@@ -253,15 +238,18 @@ class ApplyBot:
                 company_name = parsed_url.path.split('/')[1]
             elif "jobvite.io" in domain:
                 company_name = parsed_url.path.split('/')[1]
-            elif "workday" in domain:  
+            elif "workdayjobs.com" in domain or "myworkdayjobs.com" in domain:
                 
-                path_segments = parsed_url.path.split('/')
-                if len(path_segments) > 3:
-                    company_name = path_segments[3]
+                subdomain = domain.split('.')[0]
+                if subdomain.startswith("wd"):
+                    company_name = domain.split('.')[0]
+                else:
+                   company_name = subdomain            
                 
-            return company_name
+            return company_name                    
         except Exception as e:
             print(f"Error extracting company name from URL: {e}")
+            
             
     def get_apply_button_urls(self):
         apply_urls = set()
@@ -278,18 +266,15 @@ class ApplyBot:
                     self.wait.until(EC.element_to_be_clickable(button)).click()
                     time.sleep(5)
 
-                    if len(self.driver.window_handles) > 1:
+                    if (len(self.driver.window_handles)) > 1 :
                         self.driver.switch_to.window(self.driver.window_handles[-1])
                         new_url = self.driver.current_url
                         
-
                         if new_url != original_url:
                             apply_urls.add(new_url)
 
                         self.driver.close()
-                        self.driver.switch_to.window(self.driver.window_handles[0])
-                    
-                        
+                        self.driver.switch_to.window(self.driver.window_handles[0])                        
                 time.sleep(2)
         except Exception as e:
             print(f"Exception in get_apply_button_urls: {e}")
@@ -317,6 +302,10 @@ def Main():
 
     if role_type == 'ML':
         positions = ML_roles
+    elif role_type == "UI" :
+        positions = UI_roles
+    elif role_type == "QA" :
+        positions = QA_roles
     blacklist = parameters.get('blacklist', [])
     blacklisttitles = parameters.get('blackListTitles', [])   
     outputfilename = f"Output/Output_of_{parameters['username']}.csv"
@@ -325,14 +314,11 @@ def Main():
     ApplyBot(
         username=username,
         password=password,
-        locations=locations,
-        
-        
+        locations=locations,        
         blacklist=blacklist,
         blacklisttitles=blacklisttitles,
         experiencelevel=experiencelevel,
         positions=positions,
-        
         filename=outputfilename
     )
 
