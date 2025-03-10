@@ -35,8 +35,8 @@ def remove_query_parameters(url):
 def append_link_to_csv(link, platform, company, job_id, output_folder):
     if not os.path.exists(output_folder):
         os.makedirs(output_folder)
-
     csv_filename = "linkedin_jobs_date_time.csv"
+
     csv_path = os.path.join(output_folder, csv_filename)
     file_exists = os.path.isfile(csv_path)
 
@@ -137,7 +137,7 @@ class ApplyBot:
         print(f"Searching for the location= {location} and job = {position} ")
         
         
-        URL = "https://www.linkedin.com/jobs/search/?keywords=" + position_str + str(rolestring) + location_str + exp_lvl_param +"&start=" + str(Job_per_page)
+        URL = "https://www.linkedin.com/jobs/search/?keywords=" + position_str + str(rolestring) + location_str + exp_lvl_param  +"&start=" + str(Job_per_page)
 
         self.driver.get(URL)
         self.sleep(10)
@@ -154,14 +154,14 @@ class ApplyBot:
             self.driver.get(URL)
             self.sleep()
             self.load_and_scroll_page()
-            if self.is_present(self.locator["search"]):
+            if self.is_element_present(self.locator["search"]):
                 scrollresult = self.get_elements("search")
                 for i in range(300, 3000, 100):
                     self.driver.execute_script("arguments[0].scrollTo(0, {})".format(i), scrollresult[0])
                 scrollresult = self.get_elements("search")
                 self.sleep(1)
 
-            if self.is_present(self.locator["links"]):
+            if self.is_element_present(self.locator["links"]):
                 links = self.get_elements("links")
                 jobIDs = {}
                 for link in links:
@@ -218,13 +218,13 @@ class ApplyBot:
         page = BeautifulSoup(self.driver.page_source, 'lxml')
         return page
 
-    def is_present(self, locator):
+    def is_element_present(self, locator):
         return len(self.driver.find_elements(locator[0], locator[1])) > 0
 
     def get_elements(self, type) -> list:
         elements = []
         element = self.locator[type]
-        if self.is_present(element):
+        if self.is_element_present(element):
             elements = self.driver.find_elements(element[0], element[1])
         return elements
     def extract_company_name(self, url):
@@ -236,8 +236,8 @@ class ApplyBot:
                 company_name = parsed_url.path.split('/')[1]
             elif "greenhouse.io" in domain:
                 company_name = parsed_url.path.split('/')[1]
-            elif "jobvite.io" in domain:
-                company_name = parsed_url.path.split('/')[1]
+            elif "jobvite.com" in domain:
+                company_name = parsed_url.path.split('/')[2]
             elif "workdayjobs.com" in domain or "myworkdayjobs.com" in domain:
                 
                 subdomain = domain.split('.')[0]
@@ -279,7 +279,7 @@ class ApplyBot:
         except Exception as e:
             print(f"Exception in get_apply_button_urls: {e}")
         print(f"Extracted URLs: {apply_urls}")
-        return list(apply_urls)
+        return set(apply_urls)
 
 def Main():
     fileLocation = "configs/user_auth.yaml"
