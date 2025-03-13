@@ -33,56 +33,60 @@ def remove_query_parameters(url):
     return urlunparse(parsed_url._replace(query='', fragment=''))
 
 def extract_job_id_from_url(url):
-    
     parsed_url = urlparse(url)
     path_parts = parsed_url.path.split('/')
     if 'lever.co' in parsed_url.netloc:
-        if path_parts[-1]== "apply":
+        if path_parts[-1] == "apply":
             return path_parts[-2]
         return path_parts[-1]
-    
     elif "greenhouse.io" in parsed_url.netloc:
-        
         return path_parts[-1]
     elif "workdayjobs.com" in parsed_url.netloc or "myworkdayjobs.com" in parsed_url.netloc:
-        
-        return path_parts[-1]
+        if path_parts[-1]=="login" :
+            return None
+        else :
+            return path_parts[-1]
     elif "jobvite.com" in parsed_url.netloc:
-        
         return path_parts[-1]
     else:
-        
         return path_parts[-1]
 
 def append_link_to_csv(link, platform, company, output_folder):
-
     if not os.path.exists(output_folder):
         os.makedirs(output_folder)
+    
     csv_filename = "linkedin_jobs_date_time.csv"
-
     csv_path = os.path.join(output_folder, csv_filename)
     file_exists = os.path.isfile(csv_path)
 
+    job_id = extract_job_id_from_url(link)  
+    existing_job_ids = set()  
+
     if file_exists:
+        with open(csv_path, mode='r', newline='', encoding='utf-8') as csvfile:
+            reader = csv.DictReader(csvfile)
+            for row in reader:
+                existing_job_ids.add(row['job_id'])  
+
+    if job_id in existing_job_ids:
+        print(f"Job ID {job_id} already exists. Skipping...")
+        return
+
+    next_id = 1
+    if file_exists and os.path.getsize(csv_path) > 0:
         with open(csv_path, mode='r', newline='', encoding='utf-8') as csvfile:
             reader = csv.DictReader(csvfile)
             rows = list(reader)
             if rows:
                 last_id = int(rows[-1]['id'])
                 next_id = last_id + 1
-            else:
-                next_id = 1
-    else:
-        next_id = 1
-
-    job_id = extract_job_id_from_url(link)
 
     with open(csv_path, mode='a', newline='', encoding='utf-8') as csvfile:
         fieldnames = ['id', 'platform', 'company', 'job_id']
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
 
-        if not file_exists:
-            writer.writeheader()
+        if not file_exists or os.path.getsize(csv_path) == 0:
+            writer.writeheader()  
 
         writer.writerow({
             'id': next_id,
@@ -90,6 +94,8 @@ def append_link_to_csv(link, platform, company, output_folder):
             'company': company,
             'job_id': job_id
         })
+
+    print(f"Job ID {job_id} added successfully.")
 
 class ApplyBot:
     def __init__(self, username, password, filename, 
@@ -102,29 +108,29 @@ class ApplyBot:
         self.experiencelevel = experiencelevel
         self.locations = locations
         self.positions = positions
+        
         service = Service(ChromeDriverManager().install())
         self.driver = webdriver.Chrome(service=service)
         self.wait = WebDriverWait(self.driver, 30)
         self.locator = {
-            "non_easy_apply_button": (By.XPATH, '//button[contains(@class, "jobs-apply-button")]'),
-            "links": (By.XPATH, '//div[@data-job-id]'),
-            "search": (By.CLASS_NAME, "jobs-search-results-list")
+            "direct_apply_button": (By.CSS_SELECTOR, 'button.jobs-apply-button:not(.jobs-apply-button--top-card)'),
+            "job_listings": (By.CSS_SELECTOR, 'div.job-card-container'),
+            "search": (By.CSS_SELECTOR, 'input.jobs-search-box__keyboard-text-input[aria-label="Search by title, skill, or company"]'),
+            "continue_applying": (By.CSS_SELECTOR, 'button.jobs-apply-button.artdeco-button--primary')
         }
-
         self.login_to_linkedin()
 
     def login_to_linkedin(self):
         self.driver.get('https://www.linkedin.com/login')
-        self.sleep(10)
+        self.sleep(120)
         self.driver.find_element(By.ID, 'username').send_keys(self.username)
         self.driver.find_element(By.ID, 'password').send_keys(self.password)
-        self.driver.find_element(By.XPATH, "//button[@type='submit']").click()
+        self.driver.find_element(By.CSS_SELECTOR, 'button[data-litms-control-urn="login-submit"]').click()
         self.sleep(10)
         self.findingCombos_postion_location()
 
     def sleep(self, sleeptime=random.randrange(3, 6)):
         randomtime = sleeptime
-        print(f"Application is sleeping for a random time of {randomtime} seconds")
         time.sleep(randomtime)
 
     def roletypestr_convertion(self):
@@ -144,37 +150,48 @@ class ApplyBot:
 
     def findingCombos_postion_location(self):
         combolist = []
+        jobs_found = False  
         while len(combolist) < len(self.positions) * len(self.locations):
             for i in self.positions:
                 for j in self.locations:
                     combo = (i, j)
                     combolist.append(combo)
-                    self.Get_job_application_page(position=i, location=j)
+                    if self.Get_job_application_page(position=i, location=j):
+                        jobs_found = True
 
-    def Get_job_application_page(self, location, position ):
+        if not jobs_found:
+            print("no jobs found all are executed ")
+            self.driver.quit()
+            exit()
+
+    def Get_job_application_page(self, location, position):
         exp_lvl_str = ",".join(map(str, self.experiencelevel)) if self.experiencelevel else ""
         exp_lvl_param = f"&f_E={exp_lvl_str}" if exp_lvl_str else ""
         location_str = f"&location={location}"
         position_str = f"&keywords={position}"
+        
         Job_per_page = 0
         self.sleep()
         rolestring = self.roletypestr_convertion()
-        print(f"Searching for the location= {location} and job = {position} ")
         
-        URL = "https://www.linkedin.com/jobs/search/?keywords=" + position_str + str(rolestring) + location_str + exp_lvl_param + "&f_TPR=r86400" +"&start=" + str(Job_per_page)
+        URL = "https://www.linkedin.com/jobs/search/?keywords=" + position_str + str(rolestring) + location_str + exp_lvl_param + str(Job_per_page)
 
         self.driver.get(URL)
         self.sleep(10)
         try:
-            TotalresultsFound = self.driver.find_element(By.XPATH, "//*[@id='main']/div/div[2]/div[1]/header/div[1]/small/div/span")
+            TotalresultsFound = self.driver.find_element(By.CSS_SELECTOR, "header div.jobs-search-results-list__subtitle span")
             self.sleep(2)
             resultsFoundnumber = ''.join(re.findall(r'\d', TotalresultsFound.text))
-            Job_Search_Results_count = int(resultsFoundnumber)
+            Job_Search_Results_count = int(resultsFoundnumber) 
+
         except Exception as e:
             Job_Search_Results_count = 0
-        print(f"-----------------------This is the total count fo the results that can be get --{Job_Search_Results_count}----------------------------------------------------")
+
+        if Job_Search_Results_count == 0:
+            return False
+
         while Job_per_page < Job_Search_Results_count:
-            URL = "https://www.linkedin.com/jobs/search/?keywords=" + position_str + rolestring + location_str + exp_lvl_param  + "&f_TPR=r86400" + str(Job_per_page)
+            URL = "https://www.linkedin.com/jobs/search/?keywords=" + position_str + rolestring + location_str + exp_lvl_param +str(Job_per_page)
             self.driver.get(URL)
             self.sleep()
             self.load_and_scroll_page()
@@ -185,23 +202,21 @@ class ApplyBot:
                 scrollresult = self.get_elements("search")
                 self.sleep(1)
 
-            if self.is_element_present(self.locator["links"]):
-                links = self.get_elements("links")
+            if self.is_element_present(self.locator["job_listings"]):
+                job_listings = self.get_elements("job_listings")
                 jobIDs = {}
-                for link in links:
-                    print(f"the link.text is {link.text}")
+                for link in job_listings:
                     if 'Applied' not in link.text:
                         if link.text not in self.blacklist:
                             jobID = link.get_attribute("data-job-id")
                             if jobID == "search":
-                                print("Job ID not found, search keyword found instead? {}")
                                 continue
                             else:
                                 jobIDs[jobID] = "To be processed"
                 if len(jobIDs) > 0:
                     self.job_apply_loop(jobIDs)
             Job_per_page += 25
-        return
+        return True
 
     def job_apply_loop(self, jobIDS):
         for jobID in jobIDS:
@@ -209,7 +224,6 @@ class ApplyBot:
                 try:
                     self.Start_extracting_links_with_jobid(jobID)
                 except Exception as e:
-                    print(e)
                     continue
 
     def Start_extracting_links_with_jobid(self, jobid):
@@ -242,13 +256,14 @@ class ApplyBot:
         return page
 
     def is_element_present(self, locator):
-        return len(self.driver.find_elements(locator[0], locator[1])) > 0
+        return len(self.driver.find_elements(*locator)) > 0
 
     def get_elements(self, type) -> list:
         elements = []
-        element = self.locator[type]
-        if self.is_element_present(element):
-            elements = self.driver.find_elements(element[0], element[1])
+        if type in self.locator:
+            locator = self.locator[type]
+            if self.is_element_present(locator):
+                elements = self.driver.find_elements(*locator)
         return elements
 
     def extract_company_name(self, url):
@@ -271,12 +286,12 @@ class ApplyBot:
                 
             return company_name                    
         except Exception as e:
-            print(f"Error extracting company name from URL: {e}")
-            
+            print(f"Error extracting company name from URL: {e}")            
+
     def get_apply_button_urls(self):
         apply_urls = set()
         try:
-            buttons = self.get_elements("non_easy_apply_button")
+            buttons = self.get_elements("direct_apply_button")
             for button in buttons:
                 button_text = button.text.strip()
                 if "Easy Apply" in button_text:
@@ -284,9 +299,19 @@ class ApplyBot:
                 elif "Apply" in button_text:
                     original_url = self.driver.current_url
                     self.wait.until(EC.element_to_be_clickable(button)).click()
-                    time.sleep(5)
+                    time.sleep(3)
 
-                    if (len(self.driver.window_handles)) > 1 :
+                    try:
+                        popup_button = self.wait.until(
+                            EC.element_to_be_clickable(self.locator["continue_applying"])
+                        )
+                        popup_button.click()
+                        time.sleep(3)
+                    except Exception:
+                        pass 
+
+                    
+                    if len(self.driver.window_handles) > 1:
                         self.driver.switch_to.window(self.driver.window_handles[-1])
                         new_url = self.driver.current_url
                         
@@ -294,12 +319,14 @@ class ApplyBot:
                             apply_urls.add(new_url)
 
                         self.driver.close()
-                        self.driver.switch_to.window(self.driver.window_handles[0])                        
-                time.sleep(2)
+                        self.driver.switch_to.window(self.driver.window_handles[0])
+
+                    time.sleep(2)
+
         except Exception as e:
             print(f"Exception in get_apply_button_urls: {e}")
-        print(f"Extracted URLs: {apply_urls}")
-        return set(apply_urls)
+
+        return apply_urls
 
 def Main():
     fileLocation = "configs/user_auth.yaml"
