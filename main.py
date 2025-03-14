@@ -18,40 +18,81 @@ import csv
 from position_role import ML_roles, UI_roles, QA_roles
 
 def detect_platform(domain):
-    platforms = {
-        "lever": "lever",
-        "jobvite": "jobvite",
-        "greenhouse": "greenhouse",
-        "workday": "workday"  
-    }
-    for platform, platform_name in platforms.items():
-        if platform in domain:
-            return platform_name
+    
+    domain = domain.replace("careers.", "").replace("jobs.", "").replace("www.", "")
+    
+    platform = domain.split('.')[0]
+    return platform
 
 def remove_query_parameters(url):
     parsed_url = urlparse(url)
     return urlunparse(parsed_url._replace(query='', fragment=''))
 
 def extract_job_id_from_url(url):
+    
     parsed_url = urlparse(url)
     path_parts = parsed_url.path.split('/')
-    if 'lever.co' in parsed_url.netloc:
-        if path_parts[-1] == "apply":
-            return path_parts[-2]
-        return path_parts[-1]
-    elif "greenhouse.io" in parsed_url.netloc:
-        return path_parts[-1]
-    elif "workdayjobs.com" in parsed_url.netloc or "myworkdayjobs.com" in parsed_url.netloc:
-        if path_parts[-1]=="login" :
-            return None
-        else :
-            return path_parts[-1]
-    elif "jobvite.com" in parsed_url.netloc:
-        return path_parts[-1]
-    else:
-        return path_parts[-1]
+    
+    for part in reversed(path_parts):
+        if part:
+            return part
+    return None
 
-def append_link_to_csv(link, platform, company, output_folder):
+def extract_platform_and_company_from_url(url):
+    
+    parsed_url = urlparse(url)
+    domain = parsed_url.netloc.lower()
+
+    
+    platform = detect_platform(domain)
+    company = None
+
+    
+    if "greenhouse.io" in domain:
+        platform = "Greenhouse"
+        company = parsed_url.path.split('/')[1] if len(parsed_url.path.split('/')) > 1 else domain.split('.')[0]
+    elif "lever.co" in domain:
+        platform = "Lever"
+        company = parsed_url.path.split('/')[1] if len(parsed_url.path.split('/')) > 1 else domain.split('.')[0]
+    elif "jobvite.com" in domain:
+        platform = "Jobvite"
+        company = parsed_url.path.split('/')[2] if len(parsed_url.path.split('/')) > 2 else domain.split('.')[0]
+    elif "workdayjobs.com" in domain or "myworkdayjobs.com" in domain:
+        platform = "Workday"
+        subdomain = domain.split('.')[0]
+        if subdomain.startswith("wd"):
+            company = subdomain
+        else:
+            company = subdomain
+    elif "ashbyhq.com" in domain:
+        platform = "Ashby"
+        company = domain.split('.')[0]
+    elif "smartrecruiters.com" in domain:
+        platform = "SmartRecruiters"
+        company = domain.split('.')[0]
+    elif "icims.com" in domain:
+        platform = "iCIMS"
+        company = domain.split('.')[0]
+    elif "bamboohr.com" in domain:
+        platform = "BambooHR"
+        company = domain.split('.')[0]
+    elif "recruitee.com" in domain:
+        platform = "Recruitee"
+        company = domain.split('.')[0]
+    elif "jazzhr.com" in domain:
+        platform = "JazzHR"
+        company = domain.split('.')[0]
+    elif "ziprecruiter.com" in domain:
+        platform = "ZipRecruiter"
+        company = domain.split('.')[0]
+    else:
+        
+        platform = detect_platform(domain)
+        company = domain.split('.')[0]
+
+    return platform, company
+
+def append_link_to_csv(link, platform, company, output_folder, linkedin_id, platform_job_id):
     if not os.path.exists(output_folder):
         os.makedirs(output_folder)
     
@@ -59,18 +100,18 @@ def append_link_to_csv(link, platform, company, output_folder):
     csv_path = os.path.join(output_folder, csv_filename)
     file_exists = os.path.isfile(csv_path)
 
-    job_id = extract_job_id_from_url(link)  
     existing_job_ids = set()  
 
     if file_exists:
         with open(csv_path, mode='r', newline='', encoding='utf-8') as csvfile:
             reader = csv.DictReader(csvfile)
             for row in reader:
-                existing_job_ids.add(row['job_id'])  
+                existing_job_ids.add(row['linkedin_id'])  
 
-    if job_id in existing_job_ids:
-        print(f"Job ID {job_id} already exists. Skipping...")
+    if linkedin_id in existing_job_ids:
+        print(f"LinkedIn Job ID {linkedin_id} already exists. Skipping...")
         return
+
 
     next_id = 1
     if file_exists and os.path.getsize(csv_path) > 0:
@@ -78,24 +119,26 @@ def append_link_to_csv(link, platform, company, output_folder):
             reader = csv.DictReader(csvfile)
             rows = list(reader)
             if rows:
-                last_id = int(rows[-1]['id'])
+                last_id = int(rows[-1]['Id'])
                 next_id = last_id + 1
 
     with open(csv_path, mode='a', newline='', encoding='utf-8') as csvfile:
-        fieldnames = ['id', 'platform', 'company', 'job_id']
+        fieldnames = ['Id', 'linkedin_id','platform', 'company', 'platform_job_id',  'platform_link']
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
 
         if not file_exists or os.path.getsize(csv_path) == 0:
             writer.writeheader()  
 
         writer.writerow({
-            'id': next_id,
+            'Id': next_id,  
+            'linkedin_id': linkedin_id,  
             'platform': platform,
             'company': company,
-            'job_id': job_id
+            'platform_job_id': platform_job_id,
+            'platform_link': link
         })
 
-    print(f"Job ID {job_id} added successfully.")
+    print(f"Job ID {linkedin_id} added successfully with serial number {next_id}.")
 
 class ApplyBot:
     def __init__(self, username, password, filename, 
@@ -115,8 +158,7 @@ class ApplyBot:
         self.locator = {
             "direct_apply_button": (By.CSS_SELECTOR, 'button.jobs-apply-button:not(.jobs-apply-button--top-card)'),
             "job_listings": (By.CSS_SELECTOR, 'div.job-card-container'),
-            "search": (By.CSS_SELECTOR, 'input.jobs-search-box__keyboard-text-input[aria-label="Search by title, skill, or company"]'),
-            "continue_applying": (By.CSS_SELECTOR, 'button.jobs-apply-button.artdeco-button--primary')
+            "search": (By.CSS_SELECTOR, 'input.jobs-search-box__keyboard-text-input[aria-label="Search by title, skill, or company"]')
         }
         self.login_to_linkedin()
 
@@ -156,13 +198,12 @@ class ApplyBot:
                 for j in self.locations:
                     combo = (i, j)
                     combolist.append(combo)
+                    print(f"Processing combo: Position={i}, Location={j}")  
                     if self.Get_job_application_page(position=i, location=j):
                         jobs_found = True
-
-        if not jobs_found:
-            print("no jobs found all are executed ")
-            self.driver.quit()
-            exit()
+            if not jobs_found:
+                print("No jobs found. Exiting loop.")
+                break 
 
     def Get_job_application_page(self, location, position):
         exp_lvl_str = ",".join(map(str, self.experiencelevel)) if self.experiencelevel else ""
@@ -174,49 +215,37 @@ class ApplyBot:
         self.sleep()
         rolestring = self.roletypestr_convertion()
         
-        URL = "https://www.linkedin.com/jobs/search/?keywords=" + position_str + str(rolestring) + location_str + exp_lvl_param + str(Job_per_page)
-
-        self.driver.get(URL)
-        self.sleep(10)
-        try:
-            TotalresultsFound = self.driver.find_element(By.CSS_SELECTOR, "header div.jobs-search-results-list__subtitle span")
-            self.sleep(2)
-            resultsFoundnumber = ''.join(re.findall(r'\d', TotalresultsFound.text))
-            Job_Search_Results_count = int(resultsFoundnumber) 
-
-        except Exception as e:
-            Job_Search_Results_count = 0
-
-        if Job_Search_Results_count == 0:
-            return False
-
-        while Job_per_page < Job_Search_Results_count:
-            URL = "https://www.linkedin.com/jobs/search/?keywords=" + position_str + rolestring + location_str + exp_lvl_param +str(Job_per_page)
+        while True:
+            URL = "https://www.linkedin.com/jobs/search/?keywords=" + position_str + rolestring + location_str + exp_lvl_param + "&f_TPR=r86400" + "&start=" + str(Job_per_page)
+            print(f"Loading page: {URL}") 
             self.driver.get(URL)
-            self.sleep()
+            self.sleep(10)
+        
+            
+            job_listings = self.get_elements("job_listings")
+            if not job_listings:
+                print("No more job listings found. Exiting pagination.")
+                break
+            
+            
             self.load_and_scroll_page()
-            if self.is_element_present(self.locator["search"]):
-                scrollresult = self.get_elements("search")
-                for i in range(300, 3000, 100):
-                    self.driver.execute_script("arguments[0].scrollTo(0, {})".format(i), scrollresult[0])
-                scrollresult = self.get_elements("search")
-                self.sleep(1)
-
-            if self.is_element_present(self.locator["job_listings"]):
-                job_listings = self.get_elements("job_listings")
-                jobIDs = {}
-                for link in job_listings:
-                    if 'Applied' not in link.text:
-                        if link.text not in self.blacklist:
-                            jobID = link.get_attribute("data-job-id")
-                            if jobID == "search":
-                                continue
-                            else:
-                                jobIDs[jobID] = "To be processed"
-                if len(jobIDs) > 0:
-                    self.job_apply_loop(jobIDs)
+            self.process_job_listings(job_listings)
+            
+            
             Job_per_page += 25
-        return True
+
+    def process_job_listings(self, job_listings):
+        jobIDs = {}
+        for link in job_listings:
+            if 'Applied' not in link.text:
+                if link.text not in self.blacklist:
+                    jobID = link.get_attribute("data-job-id")
+                    if jobID == "search":
+                        continue
+                    else:
+                        jobIDs[jobID] = "To be processed"
+        if len(jobIDs) > 0:
+            self.job_apply_loop(jobIDs)
 
     def job_apply_loop(self, jobIDS):
         for jobID in jobIDS:
@@ -224,21 +253,25 @@ class ApplyBot:
                 try:
                     self.Start_extracting_links_with_jobid(jobID)
                 except Exception as e:
+                    print(f"Error processing job ID {jobID}: {e}")
                     continue
 
     def Start_extracting_links_with_jobid(self, jobid):
         self.Get_Job_page_with_jobid(jobid)
         self.sleep(4)
         apply_urls = self.get_apply_button_urls()
-        for url in apply_urls:
+        
+    
+        linkedin_url = self.driver.current_url
+        linkedin_job_id = linkedin_url.split('/')[-2] if linkedin_url.endswith('/') else linkedin_url.split('/')[-1]
+        
+        for url, platform, company in apply_urls:
             cleaned_url = remove_query_parameters(url)
-            platform = detect_platform(urlparse(cleaned_url).netloc)
-            if platform:
-                company = self.extract_company_name(cleaned_url)  
-                append_link_to_csv(cleaned_url, platform, company, "output")
+            platform_job_id = extract_job_id_from_url(cleaned_url)  
+            append_link_to_csv(cleaned_url, platform, company, "output", linkedin_job_id, platform_job_id)
 
     def Get_Job_page_with_jobid(self, jobID):
-        joburl = "https://www.linkedin.com/jobs/view/" + str(jobID)
+        joburl = f"https://www.linkedin.com/jobs/view/{jobID}/"
         self.driver.get(joburl)
         self.job_page = self.load_and_scroll_page()
         self.sleep(1)
@@ -262,31 +295,13 @@ class ApplyBot:
         elements = []
         if type in self.locator:
             locator = self.locator[type]
-            if self.is_element_present(locator):
+            try:
                 elements = self.driver.find_elements(*locator)
+                if not elements:
+                    print(f"No elements found for locator: {locator}")
+            except Exception as e:
+                print(f"Error finding elements: {e}")
         return elements
-
-    def extract_company_name(self, url):
-        try:
-            parsed_url = urlparse(url)
-            domain = parsed_url.netloc
-
-            if "lever.co" in domain:
-                company_name = parsed_url.path.split('/')[1]
-            elif "greenhouse.io" in domain:
-                company_name = parsed_url.path.split('/')[1]
-            elif "jobvite.com" in domain:
-                company_name = parsed_url.path.split('/')[2]
-            elif "workdayjobs.com" in domain or "myworkdayjobs.com" in domain:
-                subdomain = domain.split('.')[0]
-                if subdomain.startswith("wd"):
-                    company_name = domain.split('.')[0]
-                else:
-                   company_name = subdomain            
-                
-            return company_name                    
-        except Exception as e:
-            print(f"Error extracting company name from URL: {e}")            
 
     def get_apply_button_urls(self):
         apply_urls = set()
@@ -301,22 +316,15 @@ class ApplyBot:
                     self.wait.until(EC.element_to_be_clickable(button)).click()
                     time.sleep(3)
 
-                    try:
-                        popup_button = self.wait.until(
-                            EC.element_to_be_clickable(self.locator["continue_applying"])
-                        )
-                        popup_button.click()
-                        time.sleep(3)
-                    except Exception:
-                        pass 
-
-                    
                     if len(self.driver.window_handles) > 1:
                         self.driver.switch_to.window(self.driver.window_handles[-1])
                         new_url = self.driver.current_url
                         
                         if new_url != original_url:
-                            apply_urls.add(new_url)
+                            
+                            platform, company = extract_platform_and_company_from_url(new_url)
+                            apply_urls.add((new_url, platform, company))
+                            print(new_url)
 
                         self.driver.close()
                         self.driver.switch_to.window(self.driver.window_handles[0])
