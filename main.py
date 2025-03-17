@@ -29,25 +29,51 @@ def remove_query_parameters(url):
     return urlunparse(parsed_url._replace(query='', fragment=''))
 
 def extract_job_id_from_url(url):
-    
-    parsed_url = urlparse(url)
-    path_parts = parsed_url.path.split('/')
-    
-    for part in reversed(path_parts):
-        if part:
-            return part
-    return None
+    try:
+        parsed_url = urlparse(url)
+        path_parts = [part for part in parsed_url.path.split('/') if part]
+
+        if not path_parts:
+            return None
+
+        if 'lever.co' in parsed_url.netloc:
+             
+            if path_parts[-1] == "apply":
+                return path_parts[-2] 
+            else :
+                return path_parts[-1]
+            
+        elif "greenhouse.io" in parsed_url.netloc:
+            if  path_parts[-1]=="job_app":
+                return None
+            else :
+                return path_parts[-1]
+        elif "workdayjobs.com" in parsed_url.netloc or "myworkdayjobs.com" in parsed_url.netloc:
+            if path_parts[-1] == "login":
+                return None 
+
+            else :
+                return path_parts[-1]
+        elif "jobvite.com" in parsed_url.netloc:
+           if path_parts[-1] == "apply":
+               
+               return path_parts[-2]
+               
+           else:
+                return path_parts[-1]
+        else:
+            return path_parts[-1]
+        
+    except Exception as e:
+        print(f"Error extracting job ID from URL: {e}")
+        return None
 
 def extract_platform_and_company_from_url(url):
     
     parsed_url = urlparse(url)
     domain = parsed_url.netloc.lower()
-
-    
     platform = detect_platform(domain)
     company = None
-
-    
     if "greenhouse.io" in domain:
         platform = "Greenhouse"
         company = parsed_url.path.split('/')[1] if len(parsed_url.path.split('/')) > 1 else domain.split('.')[0]
@@ -85,11 +111,9 @@ def extract_platform_and_company_from_url(url):
     elif "ziprecruiter.com" in domain:
         platform = "ZipRecruiter"
         company = domain.split('.')[0]
-    else:
-        
+    else:        
         platform = detect_platform(domain)
         company = domain.split('.')[0]
-
     return platform, company
 
 def append_link_to_csv(link, platform, company, output_folder, linkedin_id, platform_job_id):
@@ -111,8 +135,7 @@ def append_link_to_csv(link, platform, company, output_folder, linkedin_id, plat
     if linkedin_id in existing_job_ids:
         print(f"LinkedIn Job ID {linkedin_id} already exists. Skipping...")
         return
-
-
+    
     next_id = 1
     if file_exists and os.path.getsize(csv_path) > 0:
         with open(csv_path, mode='r', newline='', encoding='utf-8') as csvfile:
@@ -164,14 +187,14 @@ class ApplyBot:
 
     def login_to_linkedin(self):
         self.driver.get('https://www.linkedin.com/login')
-        self.sleep(120)
+        self.sleep(180)
         self.driver.find_element(By.ID, 'username').send_keys(self.username)
         self.driver.find_element(By.ID, 'password').send_keys(self.password)
         self.driver.find_element(By.CSS_SELECTOR, 'button[data-litms-control-urn="login-submit"]').click()
         self.sleep(10)
         self.findingCombos_postion_location()
 
-    def sleep(self, sleeptime=random.randrange(3, 6)):
+    def sleep(self, sleeptime=random.randrange(3, 9)):
         randomtime = sleeptime
         time.sleep(randomtime)
 
@@ -220,18 +243,14 @@ class ApplyBot:
             print(f"Loading page: {URL}") 
             self.driver.get(URL)
             self.sleep(10)
-        
-            
+    
             job_listings = self.get_elements("job_listings")
             if not job_listings:
                 print("No more job listings found. Exiting pagination.")
                 break
             
-            
             self.load_and_scroll_page()
             self.process_job_listings(job_listings)
-            
-            
             Job_per_page += 25
 
     def process_job_listings(self, job_listings):
@@ -314,7 +333,7 @@ class ApplyBot:
                 elif "Apply" in button_text:
                     original_url = self.driver.current_url
                     self.wait.until(EC.element_to_be_clickable(button)).click()
-                    time.sleep(3)
+                    time.sleep(5)
 
                     if len(self.driver.window_handles) > 1:
                         self.driver.switch_to.window(self.driver.window_handles[-1])
@@ -329,13 +348,13 @@ class ApplyBot:
                         self.driver.close()
                         self.driver.switch_to.window(self.driver.window_handles[0])
 
-                    time.sleep(2)
+                    time.sleep(10)
 
         except Exception as e:
             print(f"Exception in get_apply_button_urls: {e}")
-
+        
         return apply_urls
-
+        
 def Main():
     fileLocation = "configs/user_auth.yaml"
 
